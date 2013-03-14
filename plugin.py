@@ -35,12 +35,11 @@ from twisted.internet import reactor, protocol
 from twisted.protocols import basic
 
 from supybot import callbacks
-#from supybot import ircutils
 from supybot import ircmsgs
-#from supybot import log
-#from supybot import plugins
-#from supybot import utils
+from supybot import log
+from supybot.commands import commalist
 from supybot.commands import threading
+from supybot.commands import wrap
 
 import config
 
@@ -51,10 +50,28 @@ class IrccatProtocol(basic.LineOnlyReceiver):
 
     def __init__(self, irc):
         self.irc = irc
+        self.log = log.getPluginLogger('irccat.protocol')
 
     def lineReceived(self, text):
         ''' Handle one line of input from client. '''
-        self.irc.queueMsg(ircmsgs.notice('#al-bot-test', text))
+        try:
+            section, pw, data = text.split(';', 2)
+        except ValueError:
+            self.log.warning('Illegal format: ' + text)
+            return
+        sectionlist = config.global_option('sectionlist').value
+        if not section in sectionlist:
+            self.log.warning('No such section: ' + section)
+            return
+        my_pw = config.sect_option(section, 'password').value
+        channels = config.sect_option(section, 'channels').value
+        if my_pw != pw:
+            self.log.warning('Bad password: ' + pw)
+            return
+        if not channels:
+            self.log.warning('Empty channel list: ' + section)
+        for channel in channels:
+            self.irc.queueMsg(ircmsgs.notice(channel, data))
 
 
 class IrccatFactory(protocol.Factory):
@@ -80,12 +97,62 @@ class Irccat(callbacks.Plugin):
         kwargs_ = {'installSignalHandlers': False}
         self.thread = threading.Thread(target = reactor.run, kwargs = kwargs_)
         self.thread.start()
+        self._register_sections()
+
+    def _register_sections(self):
+        ''' Register all sections present in sectionlist. '''
+        sectionlist = config.global_option('sectionlist').value
+        for section in sectionlist:
+            config.sect_option(section, 'password')
+            config.sect_option(section, 'channels')
 
     def die(self):
         ''' Tear down reactor thread and die. '''
         reactor.callFromThread(reactor.stop)
         self.thread.join()
         callbacks.Plugin.die(self)
+
+    def addsection(self, irc, msg, args, section_name, password, channels):
+        """ <section name> <password> <channel[,channel...]>
+
+        Add a new section with name, password and a comma-separated list
+        of channels which should be connected to this section.
+        """
+
+        sectionlist = config.global_option('sectionlist').value
+        if section_name in sectionlist:
+            irc.reply("Error: section exists")
+            return
+        sectionlist.append(section_name)
+        config.global_option('sectionlist').setValue(sectionlist)
+        config.sect_option(section_name, 'password').setValue(password)
+        config.sect_option(section_name, 'channels').setValue(channels)
+        irc.replySuccess()
+
+    addsection = wrap(addsection, ['owner',
+                                   'somethingWithoutSpaces',
+                                   'somethingWithoutSpaces',
+                                   commalist('validChannel')])
+
+    def killsection(self, irc, msg, args, section_name):
+        """ <section name>
+
+        Removes an existing section given it's name.
+        """
+
+        sectionlist = config.global_option('sectionlist').value
+        if not section_name in sectionlist:
+            # Dirty fix: synchronize if there's something in sections anyway.
+            config.unregister_section(section_name)
+            irc.reply("Error: no such section")
+            return
+        sectionlist.remove(section_name)
+        config.global_option('sectionlist').setValue(sectionlist)
+        config.unregister_section(section_name)
+        irc.replySuccess()
+
+    killsection = wrap(killsection, ['owner', 'somethingWithoutSpaces'])
+
 
 Class = Irccat
 

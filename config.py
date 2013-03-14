@@ -45,16 +45,20 @@ _SECTION_OPTS = {
 }
 
 
-def sect_option(section_name, option):
-    ''' Return section-specific option, registering on the fly. '''
+def sect_option(section_name, option, fail = False):
+    ''' Return section-specific option, registering on the fly unless fail. '''
     sections = global_option('sections')
     try:
         section = sections.get(section_name)
-    except registry.NonExistentRegistryEntry:
+    except registry.NonExistentRegistryEntry as ex:
+        if fail:
+            raise ex
         section = conf.registerGroup(sections, section_name)
     try:
         return section.get(option)
-    except registry.NonExistentRegistryEntry:
+    except registry.NonExistentRegistryEntry as ex:
+        if fail:
+            raise ex
         conf.registerGlobalValue(section, option, _SECTION_OPTS[option]())
         return section.get(option)
 
@@ -89,6 +93,10 @@ def global_option(option):
 Irccat = conf.registerPlugin('Irccat')
 
 conf.registerGroup(Irccat, 'sections')
+
+conf.registerGlobalValue(Irccat, 'sectionlist',
+        registry.SpaceSeparatedListOfStrings([],
+           "Internal list of configured sections, please don't touch "))
 
 conf.registerGlobalValue(Irccat, 'port',
     registry.NonNegativeInteger(12345,
