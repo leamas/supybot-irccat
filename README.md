@@ -43,7 +43,7 @@ Getting started
   a password and a list of channels to feed. Define your first section
   named foo with password pwfoo sending data to the channel #al-bot-test:
 ```
-    <leamas> @addsection foo pwfoo #al-bot-test
+    <leamas> sectiondata foo pwfoo #al-bot-test
     <al-bot-test> leamas: The operation succeeded.
 ```
 
@@ -61,43 +61,40 @@ In the selected channel you will see:
 Configuration
 -------------
 
-The configuration is done completely in the supybot registry. There are general
-settings and section specific ones.
-
-To see the general settings:
+The configuration is done completely in IRC. There are general settings
+and section specific ones. To see the general settings:
 ```
     @config list plugins.irccat
-    leamas: @sections, sectionlist, public, and port
+    leamas:  port, public, and sectionspath
 ```
 
-Each setting has help info and could be inspected and set using the config
-plugin, see it's documents. Quick crash course using port as example:
+Each general setting has help info and could be inspected and set using
+the config plugin, see it's documents. Quick crash course using port as
+example:
+
 * Getting help: `@config help plugins.irccat.port`
 * See actual value: `@config plugins.irccat.port`
-* Setting value: `@config plugins.irccat.port 60`
+* Setting value: `@config plugins.irccat.port 6060`
 
-The `public`, `sections` and `sectionlist` options are internal, please don't touch.
-So, just use the port option here.
+The `public`, option is internal, please don't touch.
 
-The available sections can be listed using
-```
-    @config list plugins.irccat.sections
-    leamas: @test1, @test2, and @test3
-```
-
-Settings for each section are below these. To see available settings:
-```
-    @config list plugins.irccat.sections.test1
-    leamas: password, and channels
-```
-
-These variables can be manipulated using the @config command in the same way.
 NOTE! After modifying the variables use `@reload Irccat` to make them
 effective.
 
-It's possible to edit the config file "by hand" as described in documentation
-for @config. However, structural changes are better done using `addsection`
-and `killsection` even if the config  file is edited after that.
+The available sections can be listed using
+```
+    <leamas> sectionlist
+    <al-bot-test> yngve ivar
+```
+
+To see actual settings:
+```
+    @sectionshow ivar
+    leamas: ivar #al-bot-test
+```
+
+These variables can be manipulated using `sectiondata` as explained in Getting Started.
+
 
 Input line format
 -----------------
@@ -106,9 +103,9 @@ Each line read from the input port should have the following format:
     <name>;<password>;<any text>
 
 - name: The name of a configuration section i. e., a value from
-  `@config list plugins.irccat.sections`.
+  `@sectionlist`.
 - password: As defined in the configuration section, use
-   `@config plugins.irccat.sections.<section name>.password` to display.
+   `@sectionshow <section name>` to display.
 - The text after the second ';' is sent verbatim to the channel(s) listed
   in the section.
 
@@ -118,18 +115,17 @@ Unparsable lines are logged but otherwise silently dropped.
 Command List
 ------------
 
-* `addsection`: Takes a section name, a password and a comma-separated
-   list of channels to feed.
+* `sectiondata`: Takes a section name, a password and a comma-separated
+   list of channels to feed. Creates section if it doesn't exist.
 
-* `killsection`: Delete a section given it's name.
+* `sectionkill`: Delete a section given it's name.
 
-* `config list plugins.irccat.sections`: List available sections
+* `sectionlist`: List available sections.
+
+* `sectionshow`: Show password and channels for a section.
 
 * `config plugins.irccat.port`: Show  the TCP port irccat listens to.
 
-* `config plugins.irccat.sections.foo.password`: Show password for section 'foo'.
-
-* `config plugins.irccat.sections.foo.channels`: Show channels for section 'foo'.
 
 Static checking
 ---------------

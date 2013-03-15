@@ -31,6 +31,8 @@
 
 ''' Main plugin module. See README for usage and configuration. '''
 
+import pickle
+
 from twisted.internet import reactor, protocol
 from twisted.protocols import basic
 
@@ -44,32 +46,103 @@ from supybot.commands import wrap
 import config
 
 
+class _Section(object):
+    ''' Section representation in _data. '''
+
+    def __init__(self, password, channels):
+        self.password = password
+        self.channels = channels
+
+
+class _Config(object):
+    ''' Persistent stored, critical zone section data. '''
+
+    def __init__(self):
+        self.log = log.getPluginLogger('irccat.config')
+        self._lock = threading.Lock()
+        self._path = config.global_option('sectionspath').value
+        self.port = config.global_option('port').value
+        try:
+            self._data = pickle.load(open(self._path))
+        except IOError:
+            self._data = {}
+            self.log.warning("Can't find stored config, creating empty.")
+            self._dump()
+        except Exception:   # Unpickle throws just anything.
+            self._data = {}
+            self.log.warning("Bad stored config, creating empty.")
+            self._dump()
+
+    def _dump(self):
+        ''' Update persistent data.'''
+        pickle.dump(self._data, open(self._path, 'w'))
+
+    def get(self, section_name):
+        ''' Return (password, channels) tuple or raise KeyError. '''
+        with self._lock:
+            s = self._data[section_name]
+        return s.password, s.channels
+
+    def update(self, section_name, password, channels):
+        ''' Store section data for name, creating it if required. '''
+        with self._lock:
+            self._data[section_name] = _Section(password, channels)
+            self._dump()
+
+    def remove(self, section_name):
+        ''' Remove existing section or raise KeyError. '''
+        with self._lock:
+            del(self._data[section_name])
+            self._dump()
+
+    def keys(self):
+        ''' Return list of section names. '''
+        with self._lock:
+            return list(self._data.keys())
+
+
 class IrccatProtocol(basic.LineOnlyReceiver):
     ''' Line protocol: parse line, forward to channel(s). '''
+
     delimiter = '\n'
 
-    def __init__(self, irc):
+    def __init__(self, irc, config_):
         self.irc = irc
+        self.config = config_
         self.log = log.getPluginLogger('irccat.protocol')
+        self.peer = None
+
+    def connectionMade(self):
+        # if blacklisted: self.transport.abortConnection()
+        self.peer = self.transport.getPeer()
+
+    def connectionLost(self, reason):            # pylint: disable=W0222
+        self.peer = None
 
     def lineReceived(self, text):
         ''' Handle one line of input from client. '''
+
+        def warning(what):
+            ''' Log  a warning about bad input. '''
+            if self.peer:
+                what += ' from: ' + str(self.peer.host)
+            self.log.warning(what)
+
         try:
             section, pw, data = text.split(';', 2)
         except ValueError:
-            self.log.warning('Illegal format: ' + text)
+            warning('Illegal format: ' + text)
             return
-        sectionlist = config.global_option('sectionlist').value
-        if not section in sectionlist:
-            self.log.warning('No such section: ' + section)
+        try:
+            my_pw, channels = self.config.get(section)
+        except KeyError:
+            warning("No such section: " + section)
             return
-        my_pw = config.sect_option(section, 'password').value
-        channels = config.sect_option(section, 'channels').value
         if my_pw != pw:
-            self.log.warning('Bad password: ' + pw)
+            warning('Bad password: ' + pw)
             return
         if not channels:
-            self.log.warning('Empty channel list: ' + section)
+            warning('Empty channel list: ' + section)
         for channel in channels:
             self.irc.queueMsg(ircmsgs.notice(channel, data))
 
@@ -77,34 +150,35 @@ class IrccatProtocol(basic.LineOnlyReceiver):
 class IrccatFactory(protocol.Factory):
     ''' Twisted factory producing a Protocol using buildProtocol. '''
 
-    def __init__(self, irc):
+    def __init__(self, irc, config_):
         self.irc = irc
+        self.config = config_
 
     def buildProtocol(self, addr):
-        return IrccatProtocol(self.irc)
+        return IrccatProtocol(self.irc, self.config)
 
 
 class Irccat(callbacks.Plugin):
-    ''' Main plugin. '''
+    '''
+    Main plugin.
+
+    Runs the dataflow from TCP port -> irc in a separate thread,
+    governed bu twisted's reactor.run(). Commands are executed in
+    main thread. The critical zone is self.config, a _Config instance.
+    '''
     # pylint: disable=E1101,R0904
 
     threaded = True
 
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
-        port = config.global_option('port').value
-        self.server = reactor.listenTCP(port, IrccatFactory(irc))
-        kwargs_ = {'installSignalHandlers': False}
-        self.thread = threading.Thread(target = reactor.run, kwargs = kwargs_)
+        self.config = _Config()
+        self.server = reactor.listenTCP(self.config.port,
+                                        IrccatFactory(irc, self.config))
+        self.thread = \
+            threading.Thread(target = reactor.run,
+                             kwargs = {'installSignalHandlers': False})
         self.thread.start()
-        self._register_sections()
-
-    def _register_sections(self):
-        ''' Register all sections present in sectionlist. '''
-        sectionlist = config.global_option('sectionlist').value
-        for section in sectionlist:
-            config.sect_option(section, 'password')
-            config.sect_option(section, 'channels')
 
     def die(self):
         ''' Tear down reactor thread and die. '''
@@ -112,46 +186,62 @@ class Irccat(callbacks.Plugin):
         self.thread.join()
         callbacks.Plugin.die(self)
 
-    def addsection(self, irc, msg, args, section_name, password, channels):
+    def sectiondata(self, irc, msg, args, section_name, password, channels):
         """ <section name> <password> <channel[,channel...]>
 
-        Add a new section with name, password and a comma-separated list
-        of channels which should be connected to this section.
+        Update a section with name, password and a comma-separated list
+        of channels which should be connected to this section. Creates
+        new section if it doesn't exist.
         """
 
-        sectionlist = config.global_option('sectionlist').value
-        if section_name in sectionlist:
-            irc.reply("Error: section exists")
-            return
-        sectionlist.append(section_name)
-        config.global_option('sectionlist').setValue(sectionlist)
-        config.sect_option(section_name, 'password').setValue(password)
-        config.sect_option(section_name, 'channels').setValue(channels)
+        self.config.update(section_name, password, channels)
         irc.replySuccess()
 
-    addsection = wrap(addsection, ['owner',
-                                   'somethingWithoutSpaces',
-                                   'somethingWithoutSpaces',
-                                   commalist('validChannel')])
+    sectiondata = wrap(sectiondata, ['owner',
+                                     'somethingWithoutSpaces',
+                                     'somethingWithoutSpaces',
+                                     commalist('validChannel')])
 
-    def killsection(self, irc, msg, args, section_name):
+    def sectionkill(self, irc, msg, args, section_name):
         """ <section name>
 
         Removes an existing section given it's name.
         """
 
-        sectionlist = config.global_option('sectionlist').value
-        if not section_name in sectionlist:
-            # Dirty fix: synchronize if there's something in sections anyway.
-            config.unregister_section(section_name)
+        try:
+            self.config.remove(section_name)
+        except KeyError:
             irc.reply("Error: no such section")
             return
-        sectionlist.remove(section_name)
-        config.global_option('sectionlist').setValue(sectionlist)
-        config.unregister_section(section_name)
         irc.replySuccess()
 
-    killsection = wrap(killsection, ['owner', 'somethingWithoutSpaces'])
+    sectionkill = wrap(sectionkill, ['owner', 'somethingWithoutSpaces'])
+
+    def sectionshow(self, irc, msg, args, section_name):
+        """ <section name>
+
+        Show data for a section.
+        """
+
+        try:
+            password, channels = self.config.get(section_name)
+        except KeyError:
+            irc.reply("Error: no such section")
+            return
+        msg = password + ' ' + ','.join(channels)
+        irc.reply(msg)
+
+    sectionshow = wrap(sectionshow, ['owner', 'somethingWithoutSpaces'])
+
+    def sectionlist(self, irc, msg, args):
+        """ <takes no arguments>
+
+        Print list of sections.
+        """
+        msg = ' '.join(self.config.keys())
+        irc.reply(msg if msg else 'No sections defined')
+
+    sectionlist = wrap(sectionlist, ['owner'])
 
 
 Class = Irccat

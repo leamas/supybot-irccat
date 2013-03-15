@@ -33,43 +33,6 @@
 import supybot.conf as conf
 import supybot.registry as registry
 
-_PW_TEXT = "Section password"
-
-_CHANNELS_TXT = "List of channels to be fed by thi section"
-
-_SECTION_OPTS = {
-    'password':
-        lambda: registry.String('', _PW_TEXT),
-    'channels':
-        lambda: registry.SpaceSeparatedListOfStrings('', _CHANNELS_TXT)
-}
-
-
-def sect_option(section_name, option, fail = False):
-    ''' Return section-specific option, registering on the fly unless fail. '''
-    sections = global_option('sections')
-    try:
-        section = sections.get(section_name)
-    except registry.NonExistentRegistryEntry as ex:
-        if fail:
-            raise ex
-        section = conf.registerGroup(sections, section_name)
-    try:
-        return section.get(option)
-    except registry.NonExistentRegistryEntry as ex:
-        if fail:
-            raise ex
-        conf.registerGlobalValue(section, option, _SECTION_OPTS[option]())
-        return section.get(option)
-
-
-def unregister_section(section_name):
-    ''' Unregister section from supybot registry. '''
-    try:
-        global_option('sections').unregister(section_name)
-    except registry.NonExistentRegistryEntry:
-        pass
-
 
 def configure(advanced):
     ''' Not used ATM '''
@@ -92,11 +55,8 @@ def global_option(option):
 
 Irccat = conf.registerPlugin('Irccat')
 
-conf.registerGroup(Irccat, 'sections')
-
-conf.registerGlobalValue(Irccat, 'sectionlist',
-        registry.SpaceSeparatedListOfStrings([],
-           "Internal list of configured sections, please don't touch "))
+conf.registerGlobalValue(Irccat, 'sectionspath',
+    registry.String('sections.pickle', 'Pickled section data'))
 
 conf.registerGlobalValue(Irccat, 'port',
     registry.NonNegativeInteger(12345,
