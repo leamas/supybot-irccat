@@ -46,6 +46,8 @@ from supybot.commands import wrap
 
 import config
 
+_HELP_URL = "https://github.com/leamas/supybot-irccat"
+
 
 class _Section(object):
     ''' Section representation in _data. '''
@@ -288,6 +290,15 @@ class Irccat(callbacks.Plugin):
         irc.reply(msg if msg else 'No sections defined')
 
     sectionlist = wrap(sectionlist, ['owner'])
+
+    def sectionhelp(self, irc, msg, args):
+        """ <takes no argument>
+
+        print help url
+        """
+        irc.reply(_HELP_URL)
+
+    sectionhelp = wrap(sectionhelp, [])
 
 
 Class = Irccat

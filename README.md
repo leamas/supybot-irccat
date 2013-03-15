@@ -125,6 +125,8 @@ Command List
 
 * `sectionshow`: Show password and channels for a section.
 
+* `sectionhelp`: Show help URL i. e., this file.
+
 * `config plugins.irccat.port`: Show  the TCP port irccat listens to.
 
 
