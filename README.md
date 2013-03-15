@@ -1,12 +1,13 @@
 Supybot Irccat Plugin
 =====================
 This is a plugin for the IRC bot Supybot that introduces the ability to
-listen to a TCP port and relay incoming text to one or more IRC channels
+listen to a TCP port and relay incoming text to one or more IRC channels,
+using some primitive security mechanisms.
 
 Dependencies
 ------------
-There's nothing special besides python 2.x (tested using 2.7), twisted
-and supybot.
+- python-twisted (tested with 12.1)
+- supybot (tested with 0.83.4)
 
 Getting started
 ---------------
@@ -109,12 +110,12 @@ Each line read from the input port should have the following format:
 - The text after the second ';' is sent verbatim to the channel(s) listed
   in the section.
 
-Unparsable lines are logged but otherwise silently dropped.
+Unparsable lines are logged but otherwise silently dropped. Blacklisted
+clients are not even logged.
 
 
 Command List
 ------------
-
 * `sectiondata`: Takes a section name, a password and a comma-separated
    list of channels to feed. Creates section if it doesn't exist.
 
@@ -125,6 +126,18 @@ Command List
 * `sectionshow`: Show password and channels for a section.
 
 * `config plugins.irccat.port`: Show  the TCP port irccat listens to.
+
+
+Security
+--------
+Irc servers are normally not Fort Knox, so this is not the place for ssl or
+2-factor authentication. That said, leaving a TCP port open as a relay to
+irc channel(s) certainly requires some precaution. The steps here are:
+
+- The client must know the section and it's password as described above.
+- Managing passwords requires 'owner' capability in irc.
+- Clients which repeatedly fails to send correct data are blacklisted for a
+  while.
 
 
 Static checking

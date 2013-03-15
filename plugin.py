@@ -32,6 +32,7 @@
 ''' Main plugin module. See README for usage and configuration. '''
 
 import pickle
+import time
 
 from twisted.internet import reactor, protocol
 from twisted.protocols import basic
@@ -52,6 +53,44 @@ class _Section(object):
     def __init__(self, password, channels):
         self.password = password
         self.channels = channels
+
+
+class _Blacklist(object):
+    ''' Handles blacklisting of aggressive clients. '''
+
+    FailMax = 4   # Max # of times
+    BlockTime = 20  # Time we wait in blacklisted state (seconds).
+
+    def __init__(self):
+        self._state = {}
+        self.log = log.getPluginLogger('irccat.blacklist')
+
+    def register(self, host, status):
+        ''' Register an event coming from host (address) being OK/Fail. '''
+        if not host in self._state:
+            self._state[host] = (1, status, time.time())
+            return
+        count, oldstate, when = self._state[host]
+        if oldstate == status:
+            self._state[host] = (count + 1, oldstate, when)
+            if not status and count + 1 == self.FailMax:
+                self.log.warning("Blacklisting: " + host)
+        else:
+            self._state[host] = (1, status, time.time())
+
+    def onList(self, host):
+        ''' Return True if host is blacklisted i. e., should be blocked.'''
+        if not host in self._state:
+            return False
+        count, oldstate, when = self._state[host]
+        if oldstate:
+            return False
+        if count >= self.FailMax:
+            if time.time() - when < self.BlockTime:
+                return True
+            else:
+                self._state[host] = (1, oldstate, time.time())
+        return False
 
 
 class _Config(object):
@@ -106,15 +145,18 @@ class IrccatProtocol(basic.LineOnlyReceiver):
 
     delimiter = '\n'
 
-    def __init__(self, irc, config_):
+    def __init__(self, irc, config_, blacklist):
         self.irc = irc
         self.config = config_
+        self.blacklist = blacklist
         self.log = log.getPluginLogger('irccat.protocol')
         self.peer = None
 
     def connectionMade(self):
         # if blacklisted: self.transport.abortConnection()
         self.peer = self.transport.getPeer()
+        if self.blacklist.onList(self.peer.host):
+            self.transport.abortConnection()
 
     def connectionLost(self, reason):            # pylint: disable=W0222
         self.peer = None
@@ -127,6 +169,7 @@ class IrccatProtocol(basic.LineOnlyReceiver):
             if self.peer:
                 what += ' from: ' + str(self.peer.host)
             self.log.warning(what)
+            self.blacklist.register(self.peer.host, False)
 
         try:
             section, pw, data = text.split(';', 2)
@@ -145,17 +188,19 @@ class IrccatProtocol(basic.LineOnlyReceiver):
             warning('Empty channel list: ' + section)
         for channel in channels:
             self.irc.queueMsg(ircmsgs.notice(channel, data))
+        self.blacklist.register(self.peer.host, True)
 
 
 class IrccatFactory(protocol.Factory):
     ''' Twisted factory producing a Protocol using buildProtocol. '''
 
-    def __init__(self, irc, config_):
+    def __init__(self, irc, config_, blacklist):
         self.irc = irc
         self.config = config_
+        self.blacklist = blacklist
 
     def buildProtocol(self, addr):
-        return IrccatProtocol(self.irc, self.config)
+        return IrccatProtocol(self.irc, self.config, self.blacklist)
 
 
 class Irccat(callbacks.Plugin):
@@ -173,8 +218,9 @@ class Irccat(callbacks.Plugin):
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
         self.config = _Config()
-        self.server = reactor.listenTCP(self.config.port,
-                                        IrccatFactory(irc, self.config))
+        self.blacklist = _Blacklist()
+        factory = IrccatFactory(irc, self.config, self.blacklist)
+        self.server = reactor.listenTCP(self.config.port, factory)
         self.thread = \
             threading.Thread(target = reactor.run,
                              kwargs = {'installSignalHandlers': False})
