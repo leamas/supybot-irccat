@@ -216,6 +216,7 @@ class Irccat(callbacks.Plugin):
     # pylint: disable=E1101,R0904
 
     threaded = True
+    admin = 'owner'       # The capability required to manage data.
 
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
@@ -245,7 +246,7 @@ class Irccat(callbacks.Plugin):
         self.config.update(section_name, password, channels)
         irc.replySuccess()
 
-    sectiondata = wrap(sectiondata, ['owner',
+    sectiondata = wrap(sectiondata, [admin,
                                      'somethingWithoutSpaces',
                                      'somethingWithoutSpaces',
                                      commalist('validChannel')])
@@ -263,7 +264,7 @@ class Irccat(callbacks.Plugin):
             return
         irc.replySuccess()
 
-    sectionkill = wrap(sectionkill, ['owner', 'somethingWithoutSpaces'])
+    sectionkill = wrap(sectionkill, [admin, 'somethingWithoutSpaces'])
 
     def sectionshow(self, irc, msg, args, section_name):
         """ <section name>
@@ -279,7 +280,7 @@ class Irccat(callbacks.Plugin):
         msg = password + ' ' + ','.join(channels)
         irc.reply(msg)
 
-    sectionshow = wrap(sectionshow, ['owner', 'somethingWithoutSpaces'])
+    sectionshow = wrap(sectionshow, [admin, 'somethingWithoutSpaces'])
 
     def sectionlist(self, irc, msg, args):
         """ <takes no arguments>
@@ -289,7 +290,7 @@ class Irccat(callbacks.Plugin):
         msg = ' '.join(self.config.keys())
         irc.reply(msg if msg else 'No sections defined')
 
-    sectionlist = wrap(sectionlist, ['owner'])
+    sectionlist = wrap(sectionlist, [admin])
 
     def sectionhelp(self, irc, msg, args):
         """ <takes no argument>
