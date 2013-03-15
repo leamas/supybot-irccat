@@ -196,10 +196,10 @@ class IrccatProtocol(basic.LineOnlyReceiver):
 class IrccatFactory(protocol.Factory):
     ''' Twisted factory producing a Protocol using buildProtocol. '''
 
-    def __init__(self, irc, config_, blacklist):
+    def __init__(self, irc, config_):
         self.irc = irc
         self.config = config_
-        self.blacklist = blacklist
+        self.blacklist = _Blacklist()
 
     def buildProtocol(self, addr):
         return IrccatProtocol(self.irc, self.config, self.blacklist)
@@ -210,7 +210,7 @@ class Irccat(callbacks.Plugin):
     Main plugin.
 
     Runs the dataflow from TCP port -> irc in a separate thread,
-    governed bu twisted's reactor.run(). Commands are executed in
+    governed by twisted's reactor.run(). Commands are executed in
     main thread. The critical zone is self.config, a _Config instance.
     '''
     # pylint: disable=E1101,R0904
@@ -221,9 +221,8 @@ class Irccat(callbacks.Plugin):
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
         self.config = _Config()
-        self.blacklist = _Blacklist()
-        factory = IrccatFactory(irc, self.config, self.blacklist)
-        self.server = reactor.listenTCP(self.config.port, factory)
+        self.server = reactor.listenTCP(self.config.port,
+                                        IrccatFactory(irc, self.config))
         self.thread = \
             threading.Thread(target = reactor.run,
                              kwargs = {'installSignalHandlers': False})
