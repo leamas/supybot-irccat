@@ -33,16 +33,131 @@
 # Missing docstrings:
 # pylint: disable=C0111
 # supybot's typenames are irregular
-# pylint: disable=C0103
 # Too many public methods:
 # pylint: disable=R0904
 
 
+import os
+import os.path
+import subprocess
+
 from supybot.test import *
 
+import config
+import plugin as irccat
 
-class IrccatTestCase(PluginTestCase):
-    plugins = ('Irccat',)
+
+def clear_sections(testcase):
+    if os.path.exists('test-sections.pickle'):
+        os.unlink('test-sections.pickle')
+    config.global_option('sectionspath').setValue('test-sections.pickle')
+    config.global_option('port').setValue(23456)
 
 
+class IrccatTestList(PluginTestCase):
+    plugins = ('Irccat', 'User')
+
+    def setUp(self, nick='test'):      # pylint: disable=W0221
+        clear_sections(self)
+        PluginTestCase.setUp(self)
+        self.assertNotError('reload Irccat')
+        self.assertNotError('register suptest suptest')
+        self.assertNotError('sectiondata ivar ivar #al-bot-test')
+
+    def testList(self):
+        self.assertResponse('sectionlist', 'ivar')
+
+    def testReload(self):
+        self.assertResponse('reload Irccat', 'The operation succeeded.')
+
+
+class IrccatTestCopy(ChannelPluginTestCase):
+    plugins = ('Irccat', 'User')
+    channel = '#test'
+    cmd_tmpl = "echo '%s' | nc --send-only localhost 23456"
+
+    def setUp(self, nick='test'):      # pylint: disable=W0221
+        clear_sections(self)
+        ChannelPluginTestCase.setUp(self)
+        self.assertNotError('reload Irccat', private = True)
+        self.assertNotError('register suptest suptest', private = True)
+        self.assertNotError('sectiondata ivar ivarpw #test', private = True)
+
+    def testCopy(self):
+        cmd = self.cmd_tmpl % 'ivar;ivarpw;ivar data'
+        subprocess.check_call(cmd, shell = True)
+        result = self.getMsg(' ')
+        self.assertEqual(result.args[1], 'ivar data')
+
+    def testBadFormat(self):
+        cmd = self.cmd_tmpl % 'ivar;ivarpw data'
+        subprocess.check_call(cmd, shell = True)
+        result = self.getMsg(' ')
+        self.assertTrue(result.args[1].startswith('Illegal format'))
+
+    def testBadPw(self):
+        cmd = self.cmd_tmpl % 'ivar;ivarpw22;ivar data'
+        subprocess.check_call(cmd, shell = True)
+        result = self.getMsg(' ')
+        self.assertTrue(result.args[1].startswith('Bad password'))
+
+    def testBadSection(self):
+        cmd = self.cmd_tmpl % 'ivaru22;ivarpw22;ivar data'
+        subprocess.check_call(cmd, shell = True)
+        result = self.getMsg(' ')
+        self.assertTrue(result.args[1].startswith('No such section'))
+
+
+class IrccatTestData(PluginTestCase):
+    plugins = ('Irccat', 'User')
+
+    def setUp(self, nick='test'):      # pylint: disable=W0221
+        clear_sections(self)
+        PluginTestCase.setUp(self)
+        self.assertNotError('reload Irccat')
+        self.assertNotError('sectiondata ivar ivar #al-bot-test')
+        self.assertNotError('sectiondata yngve yngve #al-bot-test')
+
+    def testList(self):
+        self.assertResponse('sectionlist', 'yngve ivar')
+
+    def testReload(self):
+        self.assertResponse('reload Irccat', 'The operation succeeded.')
+
+    def testShow(self):
+        self.assertResponse('sectionshow yngve', 'yngve #al-bot-test')
+
+    def testKill(self):
+        self.assertNotError('sectionkill yngve')
+        self.assertResponse('sectionlist', 'ivar')
+
+    def testKillBadSection(self):
+        self.assertResponse('sectionkill tore', 'Error: no such section')
+
+
+class BlacklistTest(SupyTestCase):
+
+    def setUp(self):
+        SupyTestCase.setUp(self)
+        self.blacklist = None
+
+    def test_block(self):
+        self.blacklist = irccat._Blacklist()    # pylint: disable=W0212
+        self.blacklist.FailMax = 5
+        self.blacklist.BlockTime = 0.2
+
+        host = '132.132.132.132'
+        self.assertFalse(self.blacklist.onList(host))
+        for i in [1, 2, 3, 4]:                 # pylint: disable=W0612
+            self.blacklist.register(host, False)
+        self.assertFalse(self.blacklist.onList(host))
+        self.blacklist.register(host, False)
+        self.assertTrue(self.blacklist.onList(host))
+        time.sleep(0.25)
+        self.assertFalse(self.blacklist.onList(host))
+        for i in [1, 2, 3, 4, 5]:
+            self.blacklist.register(host, False)
+        self.assertTrue(self.blacklist.onList(host))
+
+#
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

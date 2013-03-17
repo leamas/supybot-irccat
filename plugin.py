@@ -29,9 +29,28 @@
 # https://chris-lamb.co.uk/posts/irccat-plugin-supybot
 # http://www.jibble.org/pircbot.php
 
-''' Main plugin module. See README for usage and configuration. '''
+'''
+Main plugin module. See README for usage and configuration.
 
+Here is two processes, the main process and the io_process.
+The main process has a separate listener_thread.
+
+The io_process gets data from a port and forwards it to the
+main process. The main process handles user commands. A separate
+thread gets data from the io_process and forwards to irc.
+
+Somewhat messy. Design effected by need to run twisted in a process
+so it vcan be restarted, and that the irc state can't be shared
+i. e., the separate process cant shuffle data to irc.
+
+Here is no critical zones, this is pure message passing. The
+io_process gets updated configurations form main. Main gets data
+to print.
+ '''
+
+import multiprocessing
 import pickle
+import sys
 import time
 
 from twisted.internet import reactor, protocol
@@ -40,28 +59,36 @@ from twisted.protocols import basic
 from supybot import callbacks
 from supybot import ircmsgs
 from supybot import log
+from supybot import world
 from supybot.commands import commalist
 from supybot.commands import threading
 from supybot.commands import wrap
 
 import config
 
+
 _HELP_URL = "https://github.com/leamas/supybot-irccat"
 
 
-class _Section(object):
-    ''' Section representation in _data. '''
+def io_process(port, pipe):
+    ''' Run the twisted-governed data flow from port -> irc. '''
+    # pylint: disable=E1101
 
-    def __init__(self, password, channels):
-        self.password = password
-        self.channels = channels
+    logger = log.getPluginLogger('irccat.io')
+    logger.debug("Starting IO process on %d" % port)
+    reactor.listenTCP(port, IrccatFactory(pipe))
+    try:
+        reactor.run()
+    except Exception as ex:                          # pylint: disable=W0703
+        logger.error("Exception in io_process: " + str(ex), exc_info = True)
+    logger.info(" io_process: exiting")
 
 
 class _Blacklist(object):
-    ''' Handles blacklisting of aggressive clients. '''
+    ''' Handles blacklisting of faulty  clients. '''
 
-    FailMax = 4   # Max # of times
-    BlockTime = 20  # Time we wait in blacklisted state (seconds).
+    FailMax = 8   # Max # of times
+    BlockTime = 500  # Time we wait in blacklisted state (seconds).
 
     def __init__(self):
         self._state = {}
@@ -95,23 +122,31 @@ class _Blacklist(object):
         return False
 
 
+class _Section(object):
+    ''' Section representation in _Config._data. '''
+
+    def __init__(self, password, channels):
+        self.password = password
+        self.channels = channels
+
+
 class _Config(object):
-    ''' Persistent stored, critical zone section data. '''
+    ''' Persistent stored section data. '''
 
     def __init__(self):
-        self.log = log.getPluginLogger('irccat.config')
-        self._lock = threading.Lock()
-        self._path = config.global_option('sectionspath').value
         self.port = config.global_option('port').value
+        self._path = config.global_option('sectionspath').value
         try:
             self._data = pickle.load(open(self._path))
         except IOError:
             self._data = {}
-            self.log.warning("Can't find stored config, creating empty.")
+            logger = log.getPluginLogger('irccat.config')
+            logger.warning("Can't find stored config, creating empty.")
             self._dump()
         except Exception:   # Unpickle throws just anything.
             self._data = {}
-            self.log.warning("Bad stored config, creating empty.")
+            logger = log.getPluginLogger('irccat.config')
+            logger.warning("Bad stored config, creating empty.")
             self._dump()
 
     def _dump(self):
@@ -120,26 +155,22 @@ class _Config(object):
 
     def get(self, section_name):
         ''' Return (password, channels) tuple or raise KeyError. '''
-        with self._lock:
-            s = self._data[section_name]
+        s = self._data[section_name]
         return s.password, s.channels
 
     def update(self, section_name, password, channels):
         ''' Store section data for name, creating it if required. '''
-        with self._lock:
-            self._data[section_name] = _Section(password, channels)
-            self._dump()
+        self._data[section_name] = _Section(password, channels)
+        self._dump()
 
     def remove(self, section_name):
         ''' Remove existing section or raise KeyError. '''
-        with self._lock:
-            del(self._data[section_name])
-            self._dump()
+        del(self._data[section_name])
+        self._dump()
 
     def keys(self):
         ''' Return list of section names. '''
-        with self._lock:
-            return list(self._data.keys())
+        return list(self._data.keys())
 
 
 class IrccatProtocol(basic.LineOnlyReceiver):
@@ -147,15 +178,14 @@ class IrccatProtocol(basic.LineOnlyReceiver):
 
     delimiter = '\n'
 
-    def __init__(self, irc, config_, blacklist):
-        self.irc = irc
+    def __init__(self, config_, blacklist, msg_conn):
         self.config = config_
         self.blacklist = blacklist
-        self.log = log.getPluginLogger('irccat.protocol')
+        self.msg_conn = msg_conn
         self.peer = None
+        self.log = log.getPluginLogger('irccat.protocol')
 
     def connectionMade(self):
-        # if blacklisted: self.transport.abortConnection()
         self.peer = self.transport.getPeer()
         if self.blacklist.onList(self.peer.host):
             self.transport.abortConnection()
@@ -167,10 +197,12 @@ class IrccatProtocol(basic.LineOnlyReceiver):
         ''' Handle one line of input from client. '''
 
         def warning(what):
-            ''' Log  a warning about bad input. '''
+            ''' Log and register bad input warning. '''
             if self.peer:
                 what += ' from: ' + str(self.peer.host)
             self.log.warning(what)
+            if world.testing:
+                self.msg_conn.send((what, ['#test']))
             self.blacklist.register(self.peer.host, False)
 
         try:
@@ -188,21 +220,24 @@ class IrccatProtocol(basic.LineOnlyReceiver):
             return
         if not channels:
             warning('Empty channel list: ' + section)
-        for channel in channels:
-            self.irc.queueMsg(ircmsgs.notice(channel, data))
+        self.log.debug("Sending " + data + " to: " + str(channels))
+        self.msg_conn.send((data, channels))
         self.blacklist.register(self.peer.host, True)
 
 
 class IrccatFactory(protocol.Factory):
     ''' Twisted factory producing a Protocol using buildProtocol. '''
 
-    def __init__(self, irc, config_):
-        self.irc = irc
-        self.config = config_
+    def __init__(self, pipe):
+        self.pipe = pipe
         self.blacklist = _Blacklist()
+        assert self.pipe[0].poll(), "No initial config!"
+        self.config = self.pipe[0].recv()
 
     def buildProtocol(self, addr):
-        return IrccatProtocol(self.irc, self.config, self.blacklist)
+        if self.pipe[0].poll():
+            self.config = self.pipe[0].recv()
+        return IrccatProtocol(self.config, self.blacklist, self.pipe[0])
 
 
 class Irccat(callbacks.Plugin):
@@ -220,19 +255,48 @@ class Irccat(callbacks.Plugin):
 
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
+        self.irc = irc
+        self.log = log.getPluginLogger('irccat.irccat')
         self.config = _Config()
-        self.server = reactor.listenTCP(self.config.port,
-                                        IrccatFactory(irc, self.config))
-        self.thread = \
-            threading.Thread(target = reactor.run,
-                             kwargs = {'installSignalHandlers': False})
+
+        self.pipe = multiprocessing.Pipe()
+        self.pipe[1].send(self.config)
+        self.process = multiprocessing.Process(
+                            target = io_process,
+                            args = (self.config.port, self.pipe))
+        self.process.start()
+
+        self.listen_abort = False
+        self.thread = threading.Thread(target = self.listener_thread)
         self.thread.start()
 
-    def die(self):
+    def listener_thread(self):
+        ''' Take messages from process, write them to irc.'''
+        while not self.listen_abort:
+            try:
+                if not self.pipe[1].poll(0.5):
+                    continue
+                msg, channels = self.pipe[1].recv()
+                for channel in channels:
+                    self.irc.queueMsg(ircmsgs.notice(channel, msg))
+            except EOFError:
+                self.listen_abort = True
+            except Exception:
+                self.log.debug("LISTEN: Exception", exc_info = True)
+                self.listen_abort = True
+        self.log.debug("LISTEN: exiting")
+
+    def die(self, cmd = False):                   # pylint: disable=W0221
         ''' Tear down reactor thread and die. '''
-        reactor.callFromThread(reactor.stop)
+
+        self.log.debug("Dieing...")
+        self.process.terminate()
+        self.listen_abort = True
         self.thread.join()
-        callbacks.Plugin.die(self)
+        if cmd:
+            sys.stderr.write("\n")
+        else:
+            callbacks.Plugin.die(self)
 
     def sectiondata(self, irc, msg, args, section_name, password, channels):
         """ <section name> <password> <channel[,channel...]>
@@ -243,6 +307,7 @@ class Irccat(callbacks.Plugin):
         """
 
         self.config.update(section_name, password, channels)
+        self.pipe[1].send(self.config)
         irc.replySuccess()
 
     sectiondata = wrap(sectiondata, [admin,
@@ -261,6 +326,7 @@ class Irccat(callbacks.Plugin):
         except KeyError:
             irc.reply("Error: no such section")
             return
+        self.pipe[1].send(self.config)
         irc.replySuccess()
 
     sectionkill = wrap(sectionkill, [admin, 'somethingWithoutSpaces'])
@@ -299,6 +365,15 @@ class Irccat(callbacks.Plugin):
         irc.reply(_HELP_URL)
 
     sectionhelp = wrap(sectionhelp, [])
+
+    def irccatdie(self, irc, msg, args):
+        """ <takes no argument>
+
+        Die (only if testing)
+        """
+        self.die(cmd = True)
+
+    irccatdie = wrap(irccatdie, [admin])
 
 
 Class = Irccat

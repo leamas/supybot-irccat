@@ -8,6 +8,7 @@ Dependencies
 ------------
 - python-twisted (tested with 12.1)
 - supybot (tested with 0.83.4)
+- ncat for unit tests
 
 Getting started
 ---------------
@@ -153,4 +154,8 @@ pylint: (in the Git directory):
 ```
   $ pylint --rcfile pylint.conf \*.py > pylint.log
 ```
-Unit tests are currently not in place.
+Unit tests:
+```
+  $ supybot-test plugins/Irccat
+```
+
