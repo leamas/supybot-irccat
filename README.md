@@ -49,6 +49,12 @@ Getting started
     <al-bot-test> leamas: The operation succeeded.
 ```
 
+* Your bot must join the channel(s) you want to feed. Do this with
+  `join`, still in private window:
+```
+    <leamas> join #al-bot-test
+```
+
 * The lines sent to irccat should be formatted like
  `section;password; some text to show`. To test, send such a line using nc:
 ```
@@ -128,7 +134,7 @@ Command List
 
 * `sectionhelp`: Show help URL i. e., this file.
 
-* `config plugins.irccat.port`: Show  the TCP port irccat listens to.
+* `config plugins.irccat.port`: Show the TCP port irccat listens to.
 
 
 Security
@@ -138,13 +144,13 @@ Irc servers are normally not Fort Knox, so this is not the place for ssl or
 irc channel(s) certainly requires some precaution. The steps here are:
 
 - The client must know the section and it's password as described above.
-- Managing passwords requires 'owner' capability in irc.
+- Managing passwords and channels requires 'owner' capability in irc.
 - Clients which repeatedly fails to send correct data are blacklisted for a
   while.
 
 
-Static checking
----------------
+Static checking and unit tests.
+-------------------------------
 
 pep8 (in the Git directory):
 ```
