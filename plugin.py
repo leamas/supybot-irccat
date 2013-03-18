@@ -48,9 +48,10 @@ io_process gets updated configurations from main. Main gets data
 to print from io_process.
  '''
 
+import crypt
 import multiprocessing
 import pickle
-import sys
+import random
 import time
 
 from twisted.internet import reactor, protocol
@@ -206,17 +207,17 @@ class IrccatProtocol(basic.LineOnlyReceiver):
             self.blacklist.register(self.peer.host, False)
 
         try:
-            section, pw, data = text.split(';', 2)
+            section, cleartext_pw, data = text.split(';', 2)
         except ValueError:
             warning('Illegal format: ' + text)
             return
         try:
-            my_pw, channels = self.config.get(section)
+            cipher_pw, channels = self.config.get(section)
         except KeyError:
             warning("No such section: " + section)
             return
-        if my_pw != pw:
-            warning('Bad password: ' + pw)
+        if crypt.crypt(cleartext_pw, cipher_pw) != cipher_pw:
+            warning('Bad password: ' + cleartext_pw)
             return
         if not channels:
             warning('Empty channel list: ' + section)
@@ -303,8 +304,11 @@ class Irccat(callbacks.Plugin):
         of channels which should be connected to this section. Creates
         new section if it doesn't exist.
         """
+        salts = 'abcdcefghijklmnopqrstauvABCDEFGHIJKLMNOPQRSTUVXYZ123456789'
 
-        self.config.update(section_name, password, channels)
+        salt = random.choice(salts) + random.choice(salts)
+        cipher_pw = crypt.crypt(password, salt)
+        self.config.update(section_name, cipher_pw, channels)
         self.pipe[1].send(self.config)
         irc.replySuccess()
 

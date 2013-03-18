@@ -95,13 +95,13 @@ The available sections can be listed using
     <al-bot-test> yngve ivar
 ```
 
-To see actual settings:
+To see actual settings (password is encrypted):
 ```
     @sectionshow ivar
-    leamas: ivar #al-bot-test
+    leamas: fjdk;fdsa #al-bot-test
 ```
 
-These variables can be manipulated using `sectiondata` as explained in Getting Started.
+These settings can be manipulated using `sectiondata` as explained in Getting Started.
 
 
 Input line format
@@ -112,8 +112,9 @@ Each line read from the input port should have the following format:
 
 - name: The name of a configuration section i. e., a value from
   `@sectionlist`.
-- password: As defined in the configuration section, use
-   `@sectionshow <section name>` to display.
+- password: As defined when using `sectiondata`, see below. Stored
+  passwords  are encrypted and cannot be displayed, so you need to
+  remember these.
 - The text after the second ';' is sent verbatim to the channel(s) listed
   in the section.
 
@@ -130,7 +131,7 @@ Command List
 
 * `sectionlist`: List available sections.
 
-* `sectionshow`: Show password and channels for a section.
+* `sectionshow`: Show encrypted password and channels for a section.
 
 * `sectionhelp`: Show help URL i. e., this file.
 

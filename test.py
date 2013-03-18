@@ -92,20 +92,17 @@ class IrccatTestCopy(ChannelPluginTestCase):
     def testBadFormat(self):
         cmd = self.cmd_tmpl % 'ivar;ivarpw data'
         subprocess.check_call(cmd, shell = True)
-        result = self.getMsg(' ')
-        self.assertTrue(result.args[1].startswith('Illegal format'))
+        self.assertRegexp(' ', 'Illegal format.*')
 
     def testBadPw(self):
         cmd = self.cmd_tmpl % 'ivar;ivarpw22;ivar data'
         subprocess.check_call(cmd, shell = True)
-        result = self.getMsg(' ')
-        self.assertTrue(result.args[1].startswith('Bad password'))
+        self.assertRegexp(' ', 'Bad password.*')
 
     def testBadSection(self):
         cmd = self.cmd_tmpl % 'ivaru22;ivarpw22;ivar data'
         subprocess.check_call(cmd, shell = True)
-        result = self.getMsg(' ')
-        self.assertTrue(result.args[1].startswith('No such section'))
+        self.assertRegexp(' ', 'No such section.*')
 
 
 class IrccatTestData(PluginTestCase):
@@ -125,7 +122,7 @@ class IrccatTestData(PluginTestCase):
         self.assertResponse('reload Irccat', 'The operation succeeded.')
 
     def testShow(self):
-        self.assertResponse('sectionshow yngve', 'yngve #al-bot-test')
+        self.assertRegexp('sectionshow yngve', '.*#al-bot-test$')
 
     def testKill(self):
         self.assertNotError('sectionkill yngve')
