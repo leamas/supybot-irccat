@@ -279,7 +279,11 @@ class Irccat(callbacks.Plugin):
                     continue
                 msg, channels = self.pipe[1].recv()
                 for channel in channels:
-                    self.irc.queueMsg(ircmsgs.notice(channel, msg))
+                    if channel in self.irc.state.channels:
+                        self.irc.queueMsg(ircmsgs.notice(channel, msg))
+                    else:
+                        self.log.warning(
+                            "Can't write to non-joined channel: " + channel)
             except EOFError:
                 self.listen_abort = True
             except Exception:
