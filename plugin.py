@@ -26,9 +26,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# https://chris-lamb.co.uk/posts/irccat-plugin-supybot
-# http://www.jibble.org/pircbot.php
-
 '''
 Main plugin module. See README for usage and configuration.
 
@@ -43,7 +40,7 @@ Somewhat messy. Design effected by need to run twisted in a process
 so it vcan be restarted, and that the irc state can't be shared
 i. e., the separate process can't shuffle data to irc.
 
-Here is no critical zones, this is pure message passing. The
+Here are no critical zones, this is pure message passing. The
 io_process gets updated configurations from main. Main gets data
 to print from io_process.
  '''
