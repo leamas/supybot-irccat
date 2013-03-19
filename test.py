@@ -105,6 +105,43 @@ class IrccatTestCopy(ChannelPluginTestCase):
         self.assertRegexp(' ', 'No such section.*')
 
 
+class IrccatTestIrccat(ChannelPluginTestCase):
+    plugins = ('Irccat', 'User')
+    channel = '#test'
+    cmd_tmpl = "echo '%s' | nc --send-only localhost 23456"
+
+    def setUp(self, nick='test'):      # pylint: disable=W0221
+        clear_sections(self)
+        ChannelPluginTestCase.setUp(self)
+        self.assertNotError('reload Irccat', private = True)
+        self.assertNotError('register suptest suptest', private = True)
+        self.assertNotError('sectiondata ivar ivarpw #test', private = True)
+
+    def testIrccatEnvPw(self):
+        cmd = 'IRCCAT_PASSWORD=ivarpw plugins/Irccat/irccat' \
+              ' localhost 23456 ivar ivar data'
+        subprocess.check_call(cmd, shell = True)
+        self.assertResponse(' ', 'ivar data')
+
+    def testIrccatStdinPw(self):
+        cmd = 'plugins/Irccat/irccat -s  localhost 23456 ivar ivar data'
+        p = subprocess.Popen(cmd, shell = True, stdin = subprocess.PIPE)
+        p.communicate('ivarpw\n')
+        self.assertResponse(' ', 'ivar data')
+
+    def testIrccatBadCmdline(self):
+        cmd = 'IRCCAT_PASSWORD=ivarpw plugins/Irccat/irccat' \
+              ' localhost 23456'
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.check_output(cmd, shell = True)
+
+    def testIrccatBadPort(self):
+        cmd = 'IRCCAT_PASSWORD=ivarpw plugins/Irccat/irccat' \
+              ' localhost 23456xx ivar ivar data'
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.check_output(cmd, shell = True)
+
+
 class IrccatTestData(PluginTestCase):
     plugins = ('Irccat', 'User')
 

@@ -14,6 +14,9 @@ Obviously, the plugin is generic and could be used to a variety of things.
 It's similar to the notify plugin, but does not require the client to be on
 the same host as the supybot server.
 
+Here is also a simple script which can be used to send data to a server
+running subybot with irccat
+
 Dependencies
 ------------
 - python-twisted (tested with 12.1)
@@ -33,18 +36,22 @@ Getting started
       $ git clone https://github.com/leamas/supybot-irccat Irccat
 ```
 
-* Restart the server and use `@list` to verify that the plugin is loaded:
-```
-    <leamas> @list
-    <al-bot-test> leamas: Admin, Channel, Config, Irccat, Owner, and User
-```
-
 * Identify yourself for the bot in a *private window*. Creating user +
   password is part of the supybot-wizard process.
 ```
      <leamas> identify al my-secret-pw
      <al-bot-test> The operation succeeded.
 ```
+
+* Load plugin and use `list` to verify that the plugin is loaded (still in
+  private window):
+```
+    <leamas> load Irccat
+     <al-bot-test> The operation succeeded.
+    <leamas> list
+    <al-bot-test> leamas: Admin, Channel, Config, Irccat, Owner, and User
+```
+
 * Define the port you want to use as listener port (still in private window):
 ```
      <leamas> config plugins.irccat.port 12345
@@ -65,13 +72,14 @@ Getting started
     <leamas> join #al-bot-test
 ```
 
-* The lines sent to irccat should be formatted like
- `section;password; some text to show`. To test, send such a line using nc:
+Use the companion script to send a message...
 ```
-    $ echo "foo;pwfoo;footext to show" | nc  --send-only localhost 12345
+    $ plugins/Irccat/irccat localhost -s 12345 foo footext to show
+    pwfoo
     $
 ```
-In the selected channel you will see:
+
+...and you will see a line in the selected channel:
 ```
     *al-bot-test* footext to show
 ```
@@ -147,13 +155,20 @@ Plugin commands:
 
 * `sectionhelp`: Show help URL i. e., this file.
 
-Other useful commands:
+Other useful supybot commands:
 
 * `config plugins.irccat.port`: Show the TCP port irccat listens to.
 
 * `reload Irccat`: Make changes in e. g., plugins.irccat.port effective
 
 * `join #channel`: Make bot join a channel, required when feeding one.
+
+Scripts:
+
+* irccat [-s|-h] \<host\> \<port\> \<section\> \<text...\>.
+  Sends \<text..\>. to a supybot \<host\> running irccat on \<port\> using the
+  given \<section\>. Reads password from stdin when using [-s]  Use
+  -h/--help for details.
 
 
 Security
@@ -164,6 +179,7 @@ irc channel(s) certainly requires some precaution. The steps here are:
 
 - The client must know the section and it's password as described above.
 - Managing passwords and channels requires 'owner' capability in irc.
+- Password cleartext is not saved anywhere.
 - Clients which repeatedly fails to send correct data are blacklisted for a
   while.
 

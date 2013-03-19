@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+
+usage = """
+Send data to IRC channel
+
+usage: irccat [-s] <host> <port> <section> <text...>
+
+host:    supybot host running irccat plugin.
+port     The port irccat plugin listen to.
+section: A section defined using the sectiondata command on the
+         subybot host.
+text...  Sent verbatim to subybot, which is assumed to forward it
+         to the channel(s) bound to the section.
+
+Options:
+  -s     Read password from stdin
+
+Environment:
+         IRCCAT_PASSWORD: If not using -s, irccat expects this to hold the
+         required password.
+"""
+
+import os
+import sys
+import socket
+
+sys.argv.pop(0)
+try:
+    if sys.argv[0] == '-h' or sys.argv[0] == '--help':
+        print usage
+        sys.exit(0)
+    elif sys.argv[0] == '-s':
+        sys.argv.pop(0)
+        pw = sys.stdin.readline().strip()
+    elif 'IRCCAT_PASSWORD' in os.environ:
+        pw = os.environ['IRCCAT_PASSWORD']
+    else:
+        print usage
+        sys.exit(1)
+    host = sys.argv.pop(0)
+    port = int(sys.argv.pop(0))
+    section = sys.argv.pop(0)
+except (IndexError, ValueError):
+    print usage
+    sys.exit(1)
+text = ' '.join(sys.argv)
+if not text:
+    print usage
+    sys.exit(1)
+
+s = socket.create_connection((host, port))
+s.send('%s;%s;%s\n' % (section, pw, text))
+s.close()
+
+
+
+
+
+
+
+
