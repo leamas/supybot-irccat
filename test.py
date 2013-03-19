@@ -67,9 +67,6 @@ class IrccatTestList(PluginTestCase):
     def testList(self):
         self.assertResponse('sectionlist', 'ivar')
 
-    def testReload(self):
-        self.assertResponse('reload Irccat', 'The operation succeeded.')
-
 
 class IrccatTestCopy(ChannelPluginTestCase):
     plugins = ('Irccat', 'User')
