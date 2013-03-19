@@ -4,6 +4,16 @@ This is a plugin for the IRC bot Supybot that introduces the ability to
 listen to a TCP port and relay incoming text to one or more IRC channels,
 using some primitive security mechanisms.
 
+I have used it to integrate supybot with a Jenkins build server (jenkins
+built-in irc plugin sucks). The build script send messages when build
+is completed, and we find in the irc channel:
+
+    Jenkins: build OK. http://jenkins.cloud.fedoraproject.org/job/FedoraReview_F17_py2.7
+
+Obviously, the plugin is generic and could be used to a variety of things.
+It's similar to the notify plugin, but does not require the client to be on
+the same host as the supybot server.
+
 Dependencies
 ------------
 - python-twisted (tested with 12.1)
@@ -124,6 +134,8 @@ clients are not even logged.
 
 Command List
 ------------
+Plugin commands:
+
 * `sectiondata`: Takes a section name, a password and a comma-separated
    list of channels to feed. Creates section if it doesn't exist.
 
@@ -135,7 +147,13 @@ Command List
 
 * `sectionhelp`: Show help URL i. e., this file.
 
+Other useful commands:
+
 * `config plugins.irccat.port`: Show the TCP port irccat listens to.
+
+* `reload Irccat`: Make changes in e. g., plugins.irccat.port effective
+
+* `join #channel`: Make bot join a channel, required when feeding one.
 
 
 Security
