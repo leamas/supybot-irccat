@@ -1,3 +1,4 @@
+*.log
 *.pyc
 *.patch
 __init__.py

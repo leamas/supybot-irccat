@@ -1,0 +1,18 @@
+#!/bin/bash
+
+
+FILES=$(git diff --cached --name-status | \
+            grep -v ^D | awk '$1 $2 { print $2}' | egrep -e '.py$|.tmpl$')
+if [ -n "$FILES" ]; then
+    pep8 --config pep8.conf  $FILES
+    if [ $? -ne 0 ]; then
+        echo "pep8 failed ('git commit --no-verify' to override)"
+        exit 1
+    fi
+    export PYTHONPATH=src/
+    pylint --rcfile=pylint.conf -f text $FILES
+    if [ $? -ne 0 ]; then
+        echo  "pylint failed ('git commit --no-verify' to override)'"
+        exit 1
+    fi
+fi
