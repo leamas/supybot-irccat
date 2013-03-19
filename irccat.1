@@ -1,0 +1,48 @@
+.TH "irccat" 1
+.SH NAME
+irccat \- Send message to irc channels.
+
+.SH SYNOPSIS
+.B irccat [-s] <host> <port> <section> <text...>
+.br
+
+.SH DESCRIPTION
+irccat sends a single line message to a host running subybot with
+the supybot-irccat plugin. Such a server listens to a specific port
+and waits for formatted messages which are relayed to one or more
+irc channels.
+.PP
+The supybot-irccat plugin defines sections. Each section has a name,
+a password and a list of channels. irccat refers to such a section
+and it's password. The channels which recieves the message is handled
+by the server.
+.PP
+Besides the mandatory parameters a password must be given either by
+using -s or through the environment, see below.
+.SH EXAMPLE
+.IP "" 4
+$ irccat-s  some.server.net 12345 build "Build completed"
+.br
+my-secret-pw
+.br
+$
+.PP
+will send the message "Build completed" to some.server.net:12345 using
+the section 'build' and it's password.
+.SH OPTIONS
+.TP 4
+.B -s
+Read password from stdin.
+.TP 4
+.B h, --help
+print help info.
+
+.SH ENVIRONMENT
+.TP 4
+IRCCAT_PASSWORD
+Section password, required if not using -s.
+
+.SH SEE ALSO
+.TP 4
+https://github.com/leamas/supybot-irccat.
+Source, issue tracker, etc.
