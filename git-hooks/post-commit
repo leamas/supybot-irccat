@@ -1,0 +1,7 @@
+#!/bin/bash
+#
+# Irccat post-commit
+#
+commit=$(git rev-parse HEAD)
+commit=${commit:0:7}
+sed "s/@commit@/$commit/" < __init__.py.tmpl > __init__.py
