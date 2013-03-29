@@ -34,6 +34,8 @@ Getting started
 ```
       $ cd plugins
       $ git clone https://github.com/leamas/supybot-irccat Irccat
+      $ cd Irccat
+      $ git-hooks/post-commit
 ```
 
 * Identify yourself for the bot in a *private window*. Creating user +
