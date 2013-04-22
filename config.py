@@ -62,4 +62,7 @@ conf.registerGlobalValue(Irccat, 'port',
     registry.NonNegativeInteger(12345,
                                 "The TCP port irccat will listen to."))
 
+conf.registerGlobalValue(Irccat, 'privmsg',
+    registry.Boolean(False, 'Use privmsgs instead of the default notices'))
+
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

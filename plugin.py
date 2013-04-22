@@ -133,6 +133,7 @@ class _Config(object):
 
     def __init__(self):
         self.port = config.global_option('port').value
+        self.privmsg = config.global_option('privmsg').value
         self._path = config.global_option('sectionspath').value
         try:
             self._data = pickle.load(open(self._path))
@@ -277,7 +278,10 @@ class Irccat(callbacks.Plugin):
                 msg, channels = self.pipe[1].recv()
                 for channel in channels:
                     if channel in self.irc.state.channels:
-                        self.irc.queueMsg(ircmsgs.notice(channel, msg))
+                        if self.config.privmsg:
+                            self.irc.queueMsg(ircmsgs.privmsg(channel, msg))
+                        else:
+                            self.irc.queueMsg(ircmsgs.notice(channel, msg))
                     else:
                         self.log.warning(
                             "Can't write to non-joined channel: " + channel)
