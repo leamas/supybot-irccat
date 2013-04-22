@@ -68,6 +68,13 @@ Getting started
     <al-bot-test> leamas: The operation succeeded.
 ```
 
+* By default irccat will use *notice* messages, but some users will prefer
+  to use *privmsg* messages. To do so (still in private window):
+```
+     <leamas> config plugins.irccat.privmsg True
+     <al-bot-test> The operation succeeded.
+```
+
 * Your bot must join the channel(s) you want to feed. Do this with
   `join`, still in private window:
 ```
