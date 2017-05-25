@@ -39,19 +39,39 @@
 
 import os
 import os.path
+import socket
 import subprocess
 
 from supybot.test import *
 
-import config
-import plugin as irccat
+from . import config
+from . import plugin as irccat
 
+CLIENT = os.path.join(os.path.dirname(__file__), 'irccat')
 
 def clear_sections(testcase):
     if os.path.exists('test-sections.pickle'):
         os.unlink('test-sections.pickle')
     config.global_option('sectionspath').setValue('test-sections.pickle')
     config.global_option('port').setValue(23456)
+
+def communicate(msg, sendonly):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.connect(('localhost', 23456))
+        s.sendall(msg)
+
+        if not sendonly:
+            data = []
+            try:
+                data.append([s.recv(1024)])
+                while data[-1]:
+                    data.append(s.recv(1024))
+            except socket.timeout:
+                pass
+            return b''.join(data)
+    finally:
+        s.close()
 
 
 class IrccatTestList(PluginTestCase):
@@ -71,7 +91,6 @@ class IrccatTestList(PluginTestCase):
 class IrccatTestCopy(ChannelPluginTestCase):
     plugins = ('Irccat', 'User')
     channel = '#test'
-    cmd_tmpl = "echo '%s' | nc --send-only localhost 23456"
 
     def setUp(self, nick='test'):      # pylint: disable=W0221
         clear_sections(self)
@@ -81,24 +100,21 @@ class IrccatTestCopy(ChannelPluginTestCase):
         self.assertNotError('sectiondata ivar ivarpw #test', private = True)
 
     def testCopy(self):
-        cmd = self.cmd_tmpl % 'ivar;ivarpw;ivar data'
-        subprocess.check_call(cmd, shell = True)
+        communicate(b'ivar;ivarpw;ivar data\n', sendonly=True)
         result = self.getMsg(' ')
+        self.assertIsNot(result, None)
         self.assertEqual(result.args[1], 'ivar data')
 
     def testBadFormat(self):
-        cmd = self.cmd_tmpl % 'ivar;ivarpw data'
-        subprocess.check_call(cmd, shell = True)
+        communicate(b'ivar;ivarpw data\n', sendonly=True)
         self.assertRegexp(' ', 'Illegal format.*')
 
     def testBadPw(self):
-        cmd = self.cmd_tmpl % 'ivar;ivarpw22;ivar data'
-        subprocess.check_call(cmd, shell = True)
+        communicate(b'ivar;ivarpw22;ivar data\n', sendonly=True)
         self.assertRegexp(' ', 'Bad password.*')
 
     def testBadSection(self):
-        cmd = self.cmd_tmpl % 'ivaru22;ivarpw22;ivar data'
-        subprocess.check_call(cmd, shell = True)
+        communicate(b'ivaru22;ivarpw22;ivar data\n', sendonly=True)
         self.assertRegexp(' ', 'No such section.*')
 
 
@@ -115,28 +131,28 @@ class IrccatTestIrccat(ChannelPluginTestCase):
         self.assertNotError('sectiondata ivar ivarpw #test', private = True)
 
     def testIrccatEnvPw(self):
-        cmd = 'IRCCAT_PASSWORD=ivarpw plugins/Irccat/irccat' \
+        cmd = 'IRCCAT_PASSWORD=ivarpw %s' \
               ' localhost 23456 ivar ivar data'
-        subprocess.check_call(cmd, shell = True)
+        subprocess.check_call(cmd % CLIENT, shell = True)
         self.assertResponse(' ', 'ivar data')
 
     def testIrccatStdinPw(self):
-        cmd = 'plugins/Irccat/irccat -s  localhost 23456 ivar ivar data'
-        p = subprocess.Popen(cmd, shell = True, stdin = subprocess.PIPE)
-        p.communicate('ivarpw\n')
+        cmd = '%s -s  localhost 23456 ivar ivar data'
+        p = subprocess.Popen(cmd % CLIENT, shell = True, stdin = subprocess.PIPE)
+        p.communicate(b'ivarpw\n')
         self.assertResponse(' ', 'ivar data')
 
     def testIrccatBadCmdline(self):
-        cmd = 'IRCCAT_PASSWORD=ivarpw plugins/Irccat/irccat' \
+        cmd = 'IRCCAT_PASSWORD=ivarpw %s' \
               ' localhost 23456'
         with self.assertRaises(subprocess.CalledProcessError):
-            subprocess.check_output(cmd, shell = True)
+            subprocess.check_output(cmd % CLIENT, shell = True)
 
     def testIrccatBadPort(self):
-        cmd = 'IRCCAT_PASSWORD=ivarpw plugins/Irccat/irccat' \
+        cmd = 'IRCCAT_PASSWORD=ivarpw %s' \
               ' localhost 23456xx ivar ivar data'
         with self.assertRaises(subprocess.CalledProcessError):
-            subprocess.check_output(cmd, shell = True)
+            subprocess.check_output(cmd % CLIENT, shell = True)
 
 
 class IrccatTestData(PluginTestCase):
@@ -150,7 +166,8 @@ class IrccatTestData(PluginTestCase):
         self.assertNotError('sectiondata yngve yngve #al-bot-test')
 
     def testList(self):
-        self.assertResponse('sectionlist', 'yngve ivar')
+        m = self._feedMsg('sectionlist')
+        self.assertIn(m.args[1], ('yngve ivar', 'ivar yngve'))
 
     def testReload(self):
         self.assertResponse('reload Irccat', 'The operation succeeded.')

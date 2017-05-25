@@ -49,6 +49,7 @@ import crypt
 import multiprocessing
 import pickle
 import random
+import sys
 import time
 
 from twisted.internet import reactor, protocol
@@ -62,7 +63,7 @@ from supybot.commands import commalist
 from supybot.commands import threading
 from supybot.commands import wrap
 
-import config
+from . import config
 
 
 _HELP_URL = "https://github.com/leamas/supybot-irccat"
@@ -150,7 +151,7 @@ class _Config(object):
 
     def _dump(self):
         ''' Update persistent data.'''
-        pickle.dump(self._data, open(self._path, 'w'))
+        pickle.dump(self._data, open(self._path, 'wb'))
 
     def get(self, section_name):
         ''' Return (password, channels) tuple or raise KeyError. '''
@@ -175,7 +176,7 @@ class _Config(object):
 class IrccatProtocol(basic.LineOnlyReceiver):
     ''' Line protocol: parse line, forward to channel(s). '''
 
-    delimiter = '\n'
+    delimiter = b'\n'
 
     def __init__(self, config_, blacklist, msg_conn):
         self.config = config_
@@ -203,6 +204,13 @@ class IrccatProtocol(basic.LineOnlyReceiver):
             if world.testing:
                 self.msg_conn.send((what, ['#test']))
             self.blacklist.register(self.peer.host, False)
+
+        try:
+            if sys.version_info[0] >= 3:
+                text = text.decode()
+        except UnicodeDecodeError:
+            warning('Invalid encoding: ' + repr(text))
+            return
 
         try:
             section, cleartext_pw, data = text.split(';', 2)
