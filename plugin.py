@@ -254,7 +254,6 @@ class Irccat(callbacks.Plugin):
 
     def __init__(self, irc):
         callbacks.Plugin.__init__(self, irc)
-        self.irc = irc
         self.log = log.getPluginLogger('irccat.irccat')
         self.config = _Config()
 
@@ -277,14 +276,15 @@ class Irccat(callbacks.Plugin):
                     continue
                 msg, channels = self.pipe[1].recv()
                 for channel in channels:
-                    if channel in self.irc.state.channels:
-                        if self.config.privmsg:
-                            self.irc.queueMsg(ircmsgs.privmsg(channel, msg))
+                    for irc in world.ircs:
+                        if channel in irc.state.channels:
+                            if self.config.privmsg:
+                                irc.queueMsg(ircmsgs.privmsg(channel, msg))
+                            else:
+                                irc.queueMsg(ircmsgs.notice(channel, msg))
                         else:
-                            self.irc.queueMsg(ircmsgs.notice(channel, msg))
-                    else:
-                        self.log.warning(
-                            "Can't write to non-joined channel: " + channel)
+                            self.log.warning(
+                                "Can't write to non-joined channel: " + channel)
             except EOFError:
                 self.listen_abort = True
             except Exception:
