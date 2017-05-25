@@ -137,7 +137,7 @@ class _Config(object):
         self.privmsg = config.global_option('privmsg').value
         self._path = config.global_option('sectionspath').value
         try:
-            self._data = pickle.load(open(self._path))
+            self._data = pickle.load(open(self._path, 'rb'))
         except IOError:
             self._data = {}
             logger = log.getPluginLogger('irccat.config')
