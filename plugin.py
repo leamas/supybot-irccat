@@ -49,6 +49,7 @@ import crypt
 import multiprocessing
 import pickle
 import random
+import re
 import sys
 import time
 
@@ -135,6 +136,7 @@ class _Config(object):
     def __init__(self):
         self.port = config.global_option('port').value
         self.privmsg = config.global_option('privmsg').value
+        self.topic_regex = config.global_option('topicRegex').value
         self._path = config.global_option('sectionspath').value
         try:
             self._data = pickle.load(open(self._path, 'rb'))
@@ -276,6 +278,16 @@ class Irccat(callbacks.Plugin):
         self.thread = threading.Thread(target = self.listener_thread)
         self.thread.start()
 
+    def replace_topic(self, irc, channel, pattern, replacement):
+        """
+        Looks for pattern in channel topic and replaces it with replacement
+        string.
+        """
+        curtopic = irc.state.getTopic(channel)
+        newtopic = re.sub(pattern, lambda m: replacement, curtopic, count=1,
+                          flags=re.IGNORECASE)
+        irc.queueMsg(ircmsgs.topic(channel, newtopic))
+
     def listener_thread(self):
         ''' Take messages from process, write them to irc.'''
         while not self.listen_abort:
@@ -286,7 +298,10 @@ class Irccat(callbacks.Plugin):
                 for channel in channels:
                     for irc in world.ircs:
                         if channel in irc.state.channels:
-                            if self.config.privmsg:
+                            if self.config.topic_regex:
+                                self.replace_topic(irc, channel,
+                                                   self.config.topic_regex, msg)
+                            elif self.config.privmsg:
                                 irc.queueMsg(ircmsgs.privmsg(channel, msg))
                             else:
                                 irc.queueMsg(ircmsgs.notice(channel, msg))
