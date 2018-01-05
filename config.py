@@ -65,4 +65,7 @@ conf.registerGlobalValue(Irccat, 'port',
 conf.registerGlobalValue(Irccat, 'privmsg',
     registry.Boolean(False, 'Use privmsgs instead of the default notices'))
 
+conf.registerGlobalValue(Irccat, 'topicRegex',
+    registry.String('', 'String to replace in channel topic (disables privmsgs/notices)'))
+
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

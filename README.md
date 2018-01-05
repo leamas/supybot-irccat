@@ -75,6 +75,15 @@ Getting started
      <al-bot-test> The operation succeeded.
 ```
 
+* Another possibility is to put the message contents in the channel topic
+  instead. You can configure a [regular expression](https://docs.python.org/2/library/re.html#regular-expression-syntax)
+  that will be searched & replaced in the topic. Use empty string to disable
+  this mode. For example, to always replace entire topic with the message:
+```
+     <leamas> config plugins.irccat.topicRegex "^.*$"
+     <al-bot-test> The operation succeeded.
+```
+
 * Your bot must join the channel(s) you want to feed. Do this with
   `join`, still in private window:
 ```
