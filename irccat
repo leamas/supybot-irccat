@@ -24,15 +24,15 @@ import socket
 
 
 def error(why):
-    print "Error: " + why
-    print "Use -h for help"
+    print("Error: " + why)
+    print("Use -h for help")
     sys.exit(1)
 
 
 sys.argv.pop(0)
 try:
     if sys.argv[0] == '-h' or sys.argv[0] == '--help':
-        print usage
+        print(usage)
         sys.exit(0)
     elif sys.argv[0] == '-s':
         sys.argv.pop(0)
@@ -53,13 +53,6 @@ if not text:
     error("too few arguments.")
 
 s = socket.create_connection((host, port))
-s.send('%s;%s;%s\n' % (section, pw, text))
+#s.send('%s;%s;%s\n' % (section, pw, text))
+s.send(('%s;%s;%s\n' % (section, pw, text)).encode())
 s.close()
-
-
-
-
-
-
-
-
