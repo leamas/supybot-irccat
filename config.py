@@ -62,6 +62,10 @@ conf.registerGlobalValue(Irccat, 'port',
     registry.NonNegativeInteger(12345,
                                 "The TCP port irccat will listen to."))
 
+conf.registerGlobalValue(Irccat, 'interface',
+    registry.String("127.0.0.1",
+                    "The address irccat will bind to."))
+
 conf.registerGlobalValue(Irccat, 'privmsg',
     registry.Boolean(False, 'Use privmsgs instead of the default notices'))
 

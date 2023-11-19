@@ -69,13 +69,13 @@ from . import config
 _HELP_URL = "https://github.com/leamas/supybot-irccat"
 
 
-def io_process(port, pipe):
+def io_process(port, interface, pipe):
     ''' Run the twisted-governed data flow from port -> irc. '''
     # pylint: disable=E1101
 
     logger = log.getPluginLogger('irccat.io')
     logger.debug("Starting IO process on %d" % port)
-    reactor.listenTCP(port, IrccatFactory(pipe))
+    reactor.listenTCP(port=port, interface=interface, factory=IrccatFactory(pipe))
     try:
         reactor.run()
     except Exception as ex:                          # pylint: disable=W0703
@@ -134,6 +134,7 @@ class _Config(object):
 
     def __init__(self):
         self.port = config.global_option('port').value
+        self.interface = config.global_option('interface').value
         self.privmsg = config.global_option('privmsg').value
         self._path = config.global_option('sectionspath').value
         try:
@@ -269,7 +270,7 @@ class Irccat(callbacks.Plugin):
         self.pipe[1].send(self.config)
         self.process = multiprocessing.Process(
                             target = io_process,
-                            args = (self.config.port, self.pipe))
+                            args = (self.config.port, self.config.interface, self.pipe))
         self.process.start()
 
         self.listen_abort = False
