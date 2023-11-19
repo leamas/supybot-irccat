@@ -367,7 +367,7 @@ class Irccat(callbacks.Plugin):
 
         Print list of sections.
         """
-        msg = ' '.join(self.config.keys())
+        msg = ' '.join(list(self.config.keys()))
         irc.reply(msg if msg else 'No sections defined')
 
     sectionlist = wrap(sectionlist, [admin])
